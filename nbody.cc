@@ -1,16 +1,15 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <time.h>
-#include <math.h>
 #include "vector.h"
 #include "config.h"
 #include "planets.h"
 #include "compute.h"
 
+#include <cuda.h>
 // represents the objects in the system.  Global variables
-vector3 *hVel, *d_hVel;
-vector3 *hPos, *d_hPos;
-double *mass;
+
+
 
 //initHostMemory: Create storage for numObjects entities in our system
 //Parameters: numObjects: number of objects to allocate
@@ -18,9 +17,30 @@ double *mass;
 //Side Effects: Allocates memory in the hVel, hPos, and mass global variables
 void initHostMemory(int numObjects)
 {
-	hVel = (vector3 *)malloc(sizeof(vector3) * numObjects);
-	hPos = (vector3 *)malloc(sizeof(vector3) * numObjects);
-	mass = (double *)malloc(sizeof(double) * numObjects);
+
+
+    allocSizeVecXNUMENT = sizeof(vector3) * NUMENTITIES;
+    allocSizeMass = sizeof(double) * NUMENTITIES;
+
+	hVel = (vector3 *)malloc(allocSizeVecXNUMENT);
+	hPos = (vector3 *)malloc(allocSizeVecXNUMENT);
+	mass = (double *)malloc(allocSizeMass);
+
+	cudaError_t err;
+	err = cudaMalloc(&gHPos, allocSizeVecXNUMENT);
+	if(err != cudaSuccess){
+	    //crash
+	}
+	err = cudaMalloc(&gMass, allocSizeMass);
+	if(err != cudaSuccess){
+	    //crash
+	}
+
+	err = cudaMalloc(&gHVel, allocSizeVecXNUMENT);
+	if(err != cudaSuccess){
+	    //crash
+	}
+
 }
 
 //freeHostMemory: Free storage allocated by a previous call to initHostMemory
@@ -32,6 +52,9 @@ void freeHostMemory()
 	free(hVel);
 	free(hPos);
 	free(mass);
+	cudaFree(gHPos);
+	cudaFree(gMass);
+	cudaFree(gHVel);
 }
 
 //planetFill: Fill the first NUMPLANETS+1 entries of the entity arrays with an estimation
@@ -58,6 +81,7 @@ void planetFill(){
 //Side Effects: Fills count entries in our system starting at index start (0 based)
 void randomFill(int start, int count)
 {
+    //might paralellize this as well
 	int i, j, c = start;
 	for (i = start; i < start + count; i++)
 	{
