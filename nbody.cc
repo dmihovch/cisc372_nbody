@@ -6,9 +6,14 @@
 #include "planets.h"
 #include "compute.h"
 
-#include <cuda.h>
 // represents the objects in the system.  Global variables
 
+vector3 *hVel, *gVel;
+vector3 *hPos, *gPos;
+vector3 *accels, *gAccels;
+double *mass, *gMass;
+
+int allocSizeVecXNUMENT,allocSizeMass;
 
 
 //initHostMemory: Create storage for numObjects entities in our system
@@ -25,9 +30,10 @@ void initHostMemory(int numObjects)
 	hVel = (vector3 *)malloc(allocSizeVecXNUMENT);
 	hPos = (vector3 *)malloc(allocSizeVecXNUMENT);
 	mass = (double *)malloc(allocSizeMass);
+	accels = (vector3 *)malloc(allocSizeVecXNUMENT * NUMENTITIES);
 
 	cudaError_t err;
-	err = cudaMalloc(&gHPos, allocSizeVecXNUMENT);
+	err = cudaMalloc(&gPos, allocSizeVecXNUMENT);
 	if(err != cudaSuccess){
 	    //crash
 	}
@@ -36,10 +42,20 @@ void initHostMemory(int numObjects)
 	    //crash
 	}
 
-	err = cudaMalloc(&gHVel, allocSizeVecXNUMENT);
+	err = cudaMalloc(&gVel, allocSizeVecXNUMENT);
 	if(err != cudaSuccess){
 	    //crash
 	}
+	err = cudaMalloc(&gAccels, allocSizeVecXNUMENT*NUMENTITIES);
+	if(err != cudaSuccess){
+	    //crash
+	}
+
+	err = cudaMalloc(&gAccelsSummed, allocSizeVecXNUMENT*NUMENTITIES);
+	if(err != cudaSuccess){
+	    //crash
+	}
+
 
 }
 
@@ -52,9 +68,11 @@ void freeHostMemory()
 	free(hVel);
 	free(hPos);
 	free(mass);
-	cudaFree(gHPos);
+	free(accels);
+	cudaFree(gPos);
 	cudaFree(gMass);
-	cudaFree(gHVel);
+	cudaFree(gVel);
+	cudaFree(gAccels);
 }
 
 //planetFill: Fill the first NUMPLANETS+1 entries of the entity arrays with an estimation
@@ -126,9 +144,41 @@ int main(int argc, char **argv)
 	#ifdef DEBUG
 	printSystem(stdout);
 	#endif
+
+
+	cudaError_t err;
+
+	err = cudaMemcpy(gPos, hPos,sizeof(vector3)*NUMENTITIES, cudaMemcpyHostToDevice);
+	if(err != cudaSuccess){
+	    //crash
+	}
+	err = cudaMemcpy(gMass,mass,sizeof(double) * NUMENTITIES, cudaMemcpyHostToDevice);
+	if(err != cudaSuccess){
+	    //crash
+	}
+	err = cudaMemcpy(gAccels,accels,sizeof(vector3)*NUMENTITIES*NUMENTITIES, cudaMemcpyHostToDevice);
+	if(err != cudaSuccess){
+	    //crash
+	}
+
+	err = cudaMemcpy(gVel,hVel,sizeof(vector3)*NUMENTITIES,cudaMemcpyHostToDevice);
+	if(err != cudaSuccess){
+	    //crash
+	}
+
+
+
 	for (t_now=0;t_now<DURATION;t_now+=INTERVAL){
 		compute();
 	}
+
+
+	cudaMemcpy(hPos, gPos, sizeof(vector3)*NUMENTITIES,cudaMemcpyDeviceToHost);
+	cudaMemcpy(hVel,gVel,sizeof(vector3)*NUMENTITIES,cudaMemcpyDeviceToHost);
+	cudaMemcpy(accels,gAccels,sizeof(vector3)*NUMENTITIES*NUMENTITIES,cudaMemcpyDeviceToHost);
+
+
+
 	clock_t t1=clock()-t0;
 #ifdef DEBUG
 	printSystem(stdout);
