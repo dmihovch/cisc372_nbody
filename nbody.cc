@@ -10,7 +10,7 @@
 
 vector3 *hVel, *gVel;
 vector3 *hPos, *gPos;
-vector3 *accels, *gAccels;
+vector3 *accels, *gAccels, *gAccelsSummed;
 double *mass, *gMass;
 
 int allocSizeVecXNUMENT,allocSizeMass;
