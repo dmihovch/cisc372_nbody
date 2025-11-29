@@ -10,8 +10,10 @@ __global__ void computePairs(vector3* gAccels, vector3* gPos, double* gMass){
 
     long pair = blockIdx.x * blockDim.x + threadIdx.x;
     if(pair >= PAIRS) return;
-    int i = pair / NUMENTITIES;
-    int j = pair % NUMENTITIES;
+
+    //column
+    int i = pair % NUMENTITIES;
+    int j = pair / NUMENTITIES;
 
     if(i == j){
         FILL_VECTOR(gAccels[pair], 0, 0, 0);
@@ -33,10 +35,9 @@ __global__ void accelAdd(vector3* gAccelsSummed, vector3* gAccels){
     if(i >= NUMENTITIES) return;
 
     vector3 accelSum = {0.,0.,0.};
-    long rowIdx = i*NUMENTITIES;
     int j,k;
     for(j = 0; j<NUMENTITIES;j++){
-        long idx = rowIdx + j;
+        long idx = j * NUMENTITIES + i;
         for(k = 0; k<3; k++){
             accelSum[k] += gAccels[idx][k];
         }
