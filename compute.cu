@@ -63,9 +63,9 @@ __global__ void updateBodies(vector3* gPos, vector3* gVel, vector3* gAccelsSumme
 //Returns: None
 //Side Effect: Modifies the hPos and hVel arrays with the new positions and accelerations after 1 INTERVAL
 void compute(){
-	computePairs<<<THREAD_BLOCKS,THREADS_PER_BLOCK>>>(gAccels,gPos,gMass);
+	computePairs<<<N2_BLOCKS,THREADS_PER_BLOCK>>>(gAccels,gPos,gMass);
 
-	accelAdd<<<THREAD_BLOCKS,THREADS_PER_BLOCK>>>(gAccelsSummed,gAccels);
+	accelAdd<<<N_BLOCKS,THREADS_PER_BLOCK>>>(gAccelsSummed,gAccels);
 
-	updateBodies<<<THREAD_BLOCKS,THREADS_PER_BLOCK>>>(gPos, gVel, gAccelsSummed);
+	updateBodies<<<N_BLOCKS,THREADS_PER_BLOCK>>>(gPos, gVel, gAccelsSummed);
 }
