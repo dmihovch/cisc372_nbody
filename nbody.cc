@@ -51,7 +51,7 @@ void initHostMemory(int numObjects)
 	    //crash
 	}
 
-	err = cudaMalloc(&gAccelsSummed, allocSizeVecXNUMENT*NUMENTITIES);
+	err = cudaMalloc(&gAccelsSummed, allocSizeVecXNUMENT);
 	if(err != cudaSuccess){
 	    //crash
 	}

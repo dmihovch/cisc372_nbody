@@ -8,7 +8,7 @@
 
 __global__ void computePairs(vector3* gAccels, vector3* gPos, double* gMass){
 
-    long pair = blockIdx.x * blockDim.x + threadIdx.x;
+    long pair = (long)blockIdx.x * blockDim.x + threadIdx.x;
     if(pair >= PAIRS) return;
 
     //column
@@ -31,13 +31,13 @@ __global__ void computePairs(vector3* gAccels, vector3* gPos, double* gMass){
 }
 
 __global__ void accelAdd(vector3* gAccelsSummed, vector3* gAccels){
-    long i = blockIdx.x * blockDim.x + threadIdx.x;
+    long i = (long)blockIdx.x * blockDim.x + threadIdx.x;
     if(i >= NUMENTITIES) return;
 
     vector3 accelSum = {0.,0.,0.};
     int j,k;
     for(j = 0; j<NUMENTITIES;j++){
-        long idx = j * NUMENTITIES + i;
+        long idx = (long)j * NUMENTITIES + i;
         for(k = 0; k<3; k++){
             accelSum[k] += gAccels[idx][k];
         }
@@ -47,7 +47,7 @@ __global__ void accelAdd(vector3* gAccelsSummed, vector3* gAccels){
 
 __global__ void updateBodies(vector3* gPos, vector3* gVel, vector3* gAccelsSummed){
 
-    long i  = blockIdx.x * blockDim.x + threadIdx.x;
+    long i  = (long)blockIdx.x * blockDim.x + threadIdx.x;
     if (i >= NUMENTITIES) return;
 
     int k;
