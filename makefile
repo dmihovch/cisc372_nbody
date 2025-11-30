@@ -13,4 +13,7 @@ clean:
 
 
 cubody:
-	nvcc -o cubody nbody.cc compute.cu
+	nvcc -o cubody nbody.cc compute.cu -lm
+
+gdbody:
+	nvcc -g -G -o cubody nbody.cc compute.cu -lm

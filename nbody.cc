@@ -1,3 +1,4 @@
+#include <cstdlib>
 #include <stdlib.h>
 #include <stdio.h>
 #include <time.h>
@@ -13,7 +14,7 @@ vector3 *hPos, *gPos;
 vector3 *accels, *gAccels, *gAccelsSummed;
 double *mass, *gMass;
 
-int allocSizeVecXNUMENT,allocSizeMass;
+size_t allocSizeVecXNUMENT,allocSizeMass;
 
 
 //initHostMemory: Create storage for numObjects entities in our system
@@ -105,8 +106,10 @@ void randomFill(int start, int count)
 	{
 		for (j = 0; j < 3; j++)
 		{
-			hVel[i][j] = (double)rand() / RAND_MAX * MAX_DISTANCE * 2 - MAX_DISTANCE;
-			hPos[i][j] = (double)rand() / RAND_MAX * MAX_VELOCITY * 2 - MAX_VELOCITY;
+			// hVel[i][j] = (double)rand() / RAND_MAX * MAX_DISTANCE * 2 - MAX_DISTANCE;
+			// hPos[i][j] = (double)rand() / RAND_MAX * MAX_VELOCITY * 2 - MAX_VELOCITY;
+			hVel[i][j] = (double)rand() / RAND_MAX * MAX_VELOCITY * 2 - MAX_VELOCITY;
+			hPos[i][j] = (double)rand() / RAND_MAX * MAX_DISTANCE * 2 - MAX_DISTANCE;
 			mass[i] = (double)rand() / RAND_MAX * MAX_MASS;
 		}
 	}

@@ -24,6 +24,7 @@ __global__ void computePairs(vector3* gAccels, vector3* gPos, double* gMass){
     for (k=0;k<3;k++) distance[k]=gPos[i][k]-gPos[j][k];
     double magnitude_sq=distance[0]*distance[0]+distance[1]*distance[1]+distance[2]*distance[2];
     double magnitude=sqrt(magnitude_sq);
+    if(magnitude_sq == 0) magnitude_sq = 1;
     double accelmag=-1*GRAV_CONSTANT*gMass[j]/magnitude_sq;
     FILL_VECTOR(gAccels[pair],accelmag*distance[0]/magnitude,accelmag*distance[1]/magnitude,accelmag*distance[2]/magnitude);
 
