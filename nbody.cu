@@ -18,7 +18,11 @@
 #define N2_BLOCKS (((PAIRS + THREADS_PER_BLOCK)-1)/THREADS_PER_BLOCK)
 #define N_BLOCKS (((NUMENTITIES + THREADS_PER_BLOCK)-1)/THREADS_PER_BLOCK)
 
-
+extern vector3 *hVel, *gVel;
+extern vector3 *hPos, *gPos;
+extern vector3 *accels, *gAccels, *gAccelsSummed;
+extern double *mass, *gMass;
+extern size_t allocSizeVecXNUMENT,allocSizeMass;
 
 
 
@@ -194,7 +198,7 @@ void planetFill(){
 void randomFill(int start, int count)
 {
     //might paralellize this as well
-	int i, j, c = start;
+	int i, j = start;
 	for (i = start; i < start + count; i++)
 	{
 		for (j = 0; j < 3; j++)
@@ -232,9 +236,12 @@ int main(int argc, char **argv)
 	int t_now;
 	//srand(time(NULL));
 	srand(1234);
-	initHostMemory(NUMENTITIES);
+
+	if(initHostMemory(NUMENTITIES) != 0) cleanupMem();
+	if(initGpuMemory()!=0) cleanupMem();
 	planetFill();
 	randomFill(NUMPLANETS + 1, NUMASTEROIDS);
+	printf("We have a system\n");
 	//now we have a system.
 	#ifdef DEBUG
 	printSystem(stdout);
@@ -262,13 +269,11 @@ int main(int argc, char **argv)
 	err = cudaMemcpy(gVel,hVel,sizeof(vector3)*NUMENTITIES,cudaMemcpyHostToDevice);
 	if(err != cudaSuccess){
 	    cleanupMem();
-		return 1;
+		return 5;
 	}
 
 
-
 	for (t_now=0;t_now<DURATION;t_now+=INTERVAL){
-
 	    computePairs<<<N2_BLOCKS,THREADS_PER_BLOCK>>>(gAccels,gPos,gMass);
 		if(cudaGetLastError() != cudaSuccess){
 			cleanupMem();
@@ -288,8 +293,6 @@ int main(int argc, char **argv)
 
 
 	}
-
-
 	cudaMemcpy(hPos, gPos, sizeof(vector3)*NUMENTITIES,cudaMemcpyDeviceToHost);
 	if(err != cudaSuccess){
 		cleanupMem();
@@ -305,14 +308,15 @@ int main(int argc, char **argv)
   		cleanupMem();
 		return 1;
 	}
-
-
-
 	clock_t t1=clock()-t0;
 #ifdef DEBUG
 	printSystem(stdout);
 #endif
 	printf("This took a total time of %f seconds\n",(double)t1/CLOCKS_PER_SEC);
 
-	freeHostMemory();
+	cleanupMem();
+
+	return 0;
+
+
 }
