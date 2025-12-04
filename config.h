@@ -8,10 +8,9 @@
 #define WEEK 			DAY*7
 #define YEAR 			DAY*365
 //Configurable
-#define NUMASTEROIDS 1000
+#define NUMASTEROIDS 10000
 #define GRAV_CONSTANT 6.67e-11 //the gravitational constant
-//#define MAX_DISTANCE 5000.0
-#define MAX_DISTANCE 4.0e11
+#define MAX_DISTANCE 5000.0
 #define MAX_VELOCITY 50000.0
 #define MAX_MASS 938e18  //approximate mass of ceres.
 #define DURATION (10*YEAR)
@@ -19,12 +18,5 @@
 //End Configurable
 
 #define NUMENTITIES (NUMPLANETS+NUMASTEROIDS+1)
-
-
-
-#define PAIRS (NUMENTITIES*NUMENTITIES)
-#define THREADS_PER_BLOCK 256
-#define N2_BLOCKS (((PAIRS + THREADS_PER_BLOCK)-1)/THREADS_PER_BLOCK)
-#define N_BLOCKS (((NUMENTITIES + THREADS_PER_BLOCK)-1)/THREADS_PER_BLOCK)
 
 #endif

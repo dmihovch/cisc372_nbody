@@ -1,11 +1,78 @@
-#include <cstdlib>
 #include <stdlib.h>
 #include <stdio.h>
 #include <time.h>
-#include "vector.h"
+#include <cuda_runtime.h>
+#include <cuda_device_runtime_api.h>
+#include <driver_types.h>
+#include <math.h>
+#include <cuda.h>
+
 #include "config.h"
 #include "planets.h"
-#include "compute.h"
+#include "vector.h"
+
+
+
+#define PAIRS (NUMENTITIES*NUMENTITIES)
+#define THREADS_PER_BLOCK 256
+#define N2_BLOCKS (((PAIRS + THREADS_PER_BLOCK)-1)/THREADS_PER_BLOCK)
+#define N_BLOCKS (((NUMENTITIES + THREADS_PER_BLOCK)-1)/THREADS_PER_BLOCK)
+
+
+
+
+
+__global__ void computePairs(vector3* gAccels, vector3* gPos, double* gMass){
+
+    long pair = (long)blockIdx.x * blockDim.x + threadIdx.x;
+    if(pair >= PAIRS) return;
+
+    //column
+    int i = pair % NUMENTITIES;
+    int j = pair / NUMENTITIES;
+
+    if(i == j){
+        FILL_VECTOR(gAccels[pair], 0, 0, 0);
+        return;
+    }
+    int k;
+    vector3 distance;
+    for (k=0;k<3;k++) distance[k]=gPos[i][k]-gPos[j][k];
+    double magnitude_sq=distance[0]*distance[0]+distance[1]*distance[1]+distance[2]*distance[2];
+    double magnitude=sqrt(magnitude_sq);
+    if(magnitude_sq == 0) magnitude_sq = 1;
+    double accelmag=-1*GRAV_CONSTANT*gMass[j]/magnitude_sq;
+    FILL_VECTOR(gAccels[pair],accelmag*distance[0]/magnitude,accelmag*distance[1]/magnitude,accelmag*distance[2]/magnitude);
+
+
+}
+
+__global__ void accelAdd(vector3* gAccelsSummed, vector3* gAccels){
+    long i = (long)blockIdx.x * blockDim.x + threadIdx.x;
+    if(i >= NUMENTITIES) return;
+
+    vector3 accelSum = {0.,0.,0.};
+    int j,k;
+    for(j = 0; j<NUMENTITIES;j++){
+        long idx = (long)j * NUMENTITIES + i;
+        for(k = 0; k<3; k++){
+            accelSum[k] += gAccels[idx][k];
+        }
+    }
+    FILL_VECTOR(gAccelsSummed[i], accelSum[0], accelSum[1], accelSum[2]);
+}
+
+__global__ void updateBodies(vector3* gPos, vector3* gVel, vector3* gAccelsSummed){
+
+    long i  = (long)blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= NUMENTITIES) return;
+
+    int k;
+    for (k=0; k<3; k++){
+        gVel[i][k] += gAccelsSummed[i][k] * INTERVAL;
+        gPos[i][k] += gVel[i][k] * INTERVAL;
+    }
+}
 
 // represents the objects in the system.  Global variables
 
@@ -21,7 +88,7 @@ size_t allocSizeVecXNUMENT,allocSizeMass;
 //Parameters: numObjects: number of objects to allocate
 //Returns: None
 //Side Effects: Allocates memory in the hVel, hPos, and mass global variables
-void initHostMemory(int numObjects)
+int initHostMemory(int numObjects)
 {
 
 
@@ -29,53 +96,79 @@ void initHostMemory(int numObjects)
     allocSizeMass = sizeof(double) * NUMENTITIES;
 
 	hVel = (vector3 *)malloc(allocSizeVecXNUMENT);
+	if(hVel == NULL){
+	    return 1;
+	}
 	hPos = (vector3 *)malloc(allocSizeVecXNUMENT);
+	if(hPos == NULL){
+	    return 1;
+	}
 	mass = (double *)malloc(allocSizeMass);
+	if(mass == NULL){
+		return 1;
+	}
 	accels = (vector3 *)malloc(allocSizeVecXNUMENT * NUMENTITIES);
+	if(accels == NULL){
+		return 1;
+	}
+
+	return 0;
+
+}
+
+
+int initGpuMemory(){
 
 	cudaError_t err;
 	err = cudaMalloc(&gPos, allocSizeVecXNUMENT);
 	if(err != cudaSuccess){
-	    //crash
+		return 1;
 	}
 	err = cudaMalloc(&gMass, allocSizeMass);
 	if(err != cudaSuccess){
 	    //crash
+		return 1;
 	}
 
 	err = cudaMalloc(&gVel, allocSizeVecXNUMENT);
 	if(err != cudaSuccess){
 	    //crash
+		return 1;
 	}
 	err = cudaMalloc(&gAccels, allocSizeVecXNUMENT*NUMENTITIES);
 	if(err != cudaSuccess){
-	    //crash
+	    return 1;
 	}
 
 	err = cudaMalloc(&gAccelsSummed, allocSizeVecXNUMENT);
 	if(err != cudaSuccess){
-	    //crash
+	    return 1;
 	}
-
-
+	return 0;
 }
 
-//freeHostMemory: Free storage allocated by a previous call to initHostMemory
-//Parameters: None
-//Returns: None
-//Side Effects: Frees the memory allocated to global variables hVel, hPos, and mass.
+
+
 void freeHostMemory()
 {
-	free(hVel);
-	free(hPos);
-	free(mass);
-	free(accels);
-	cudaFree(gPos);
-	cudaFree(gMass);
-	cudaFree(gVel);
-	cudaFree(gAccels);
+	if(hVel)free(hVel);
+	if(hPos)free(hPos);
+	if(mass)free(mass);
+	if(accels)free(accels);
 }
 
+
+void freeGpuMemory(){
+	if(gPos) cudaFree(gPos);
+	if(gMass) cudaFree(gMass);
+	if(gVel) cudaFree(gVel);
+	if(gAccels) cudaFree(gAccels);
+}
+
+void cleanupMem(){
+	freeHostMemory();
+	freeGpuMemory();
+}
 //planetFill: Fill the first NUMPLANETS+1 entries of the entity arrays with an estimation
 //				of our solar system (Sun+NUMPLANETS)
 //Parameters: None
@@ -106,10 +199,9 @@ void randomFill(int start, int count)
 	{
 		for (j = 0; j < 3; j++)
 		{
-			// hVel[i][j] = (double)rand() / RAND_MAX * MAX_DISTANCE * 2 - MAX_DISTANCE;
-			// hPos[i][j] = (double)rand() / RAND_MAX * MAX_VELOCITY * 2 - MAX_VELOCITY;
-			hVel[i][j] = (double)rand() / RAND_MAX * MAX_VELOCITY * 2 - MAX_VELOCITY;
-			hPos[i][j] = (double)rand() / RAND_MAX * MAX_DISTANCE * 2 - MAX_DISTANCE;
+			//?????????
+			hVel[i][j] = (double)rand() / RAND_MAX * MAX_DISTANCE * 2 - MAX_DISTANCE;
+			hPos[i][j] = (double)rand() / RAND_MAX * MAX_VELOCITY * 2 - MAX_VELOCITY;
 			mass[i] = (double)rand() / RAND_MAX * MAX_MASS;
 		}
 	}
@@ -153,32 +245,66 @@ int main(int argc, char **argv)
 
 	err = cudaMemcpy(gPos, hPos,sizeof(vector3)*NUMENTITIES, cudaMemcpyHostToDevice);
 	if(err != cudaSuccess){
-	    //crash
+		cleanupMem();
+		return 1;
 	}
 	err = cudaMemcpy(gMass,mass,sizeof(double) * NUMENTITIES, cudaMemcpyHostToDevice);
 	if(err != cudaSuccess){
-	    //crash
+  		cleanupMem();
+    	return 1;
 	}
 	err = cudaMemcpy(gAccels,accels,sizeof(vector3)*NUMENTITIES*NUMENTITIES, cudaMemcpyHostToDevice);
 	if(err != cudaSuccess){
-	    //crash
+  		cleanupMem();
+   		return 1;
 	}
 
 	err = cudaMemcpy(gVel,hVel,sizeof(vector3)*NUMENTITIES,cudaMemcpyHostToDevice);
 	if(err != cudaSuccess){
-	    //crash
+	    cleanupMem();
+		return 1;
 	}
 
 
 
 	for (t_now=0;t_now<DURATION;t_now+=INTERVAL){
-		compute();
+
+	    computePairs<<<N2_BLOCKS,THREADS_PER_BLOCK>>>(gAccels,gPos,gMass);
+		if(cudaGetLastError() != cudaSuccess){
+			cleanupMem();
+			return 1;
+		}
+		accelAdd<<<N_BLOCKS,THREADS_PER_BLOCK>>>(gAccelsSummed,gAccels);
+		if(cudaGetLastError() != cudaSuccess){
+			cleanupMem();
+		    return 1;
+		}
+		updateBodies<<<N_BLOCKS,THREADS_PER_BLOCK>>>(gPos, gVel, gAccelsSummed);
+		if(cudaGetLastError()!= cudaSuccess){
+			cleanupMem();
+		    return 1;
+		}
+
+
+
 	}
 
 
 	cudaMemcpy(hPos, gPos, sizeof(vector3)*NUMENTITIES,cudaMemcpyDeviceToHost);
+	if(err != cudaSuccess){
+		cleanupMem();
+		return 1;
+	}
 	cudaMemcpy(hVel,gVel,sizeof(vector3)*NUMENTITIES,cudaMemcpyDeviceToHost);
+	if(err != cudaSuccess){
+  		cleanupMem();
+		return 1;
+	}
 	cudaMemcpy(accels,gAccels,sizeof(vector3)*NUMENTITIES*NUMENTITIES,cudaMemcpyDeviceToHost);
+	if(err != cudaSuccess){
+  		cleanupMem();
+		return 1;
+	}
 
 
 
